@@ -16,11 +16,12 @@ A simple Blender add-on to easily create and manage EXR multipass outputs for co
 
 ## Features
 
-- Automatically creates a Render Layers and File Output node setup configured for exporting multilayer EXR files
-- Prevents duplicate nodes (if a node created by the add-on already exists, the viewport focuses on it instead)
-- Adds a "Refresh" button to reconnect passes without recreating the node
-- Standardizes pass names to more widely accepted naming conventions
-- Optimized for clean and fast EXR export for post-production
+- **Blender 4.x & 5.0+ Compatibility:** Automatically handles API changes between versions for File Output slots and items.
+- **Grid Organization:** Arranges nodes into columns by View Layer and vertical stacks for duplicates.
+- **Color Coding:** Assigns unique colors to layers and applies 10% brightness stepping for copies.
+- **Pass Synchronization:** The "Refresh" button adds new passes and removes disabled ones from the File Output node.
+- **Strict Layout Logic:** Calculates frame height mathematically to maintain a fixed gap and prevent overlapping.
+- **Duplicate Control:** Toggle "Allow Multiple Copies" to manage whether the same layer can have several setups.
 
 ## Installation
 
@@ -33,7 +34,7 @@ A simple Blender add-on to easily create and manage EXR multipass outputs for co
 
 - Open Blender and go to the **Compositing** tab.
 - In the sidebar ("N" key), find the "EXR Multipass" panel.
-- Click "Create EXR Multipass" to generate the Render Layers and File Output node setup.
+- Click "Create" to generate the Render Layers and File Output node setup.
 - Use the "Refresh" button if you add or change render passes.
 
 ## License
