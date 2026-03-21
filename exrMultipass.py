@@ -1,11 +1,11 @@
 bl_info = {
     'name': 'EXR_multipass',
     'author': 'Rei',
-    'version': (1, 5, 2),
+    'version': (1, 5, 3),
     'blender': (4, 0, 0),
     'category': 'Compositing',
     'location': 'Compositing Tab > Sidebar > EXR_multipass',
-    'description': 'EXR setup with ordered coloring, 10% brightness steps, and tight offset.',
+    'description': 'Structured EXR setup with layer-based columns and vertical stacking.',
 }
 
 import bpy
@@ -39,33 +39,35 @@ def hex_to_rgb(hex_str):
     hex_str = hex_str.lstrip('#')
     return tuple(int(hex_str[i:i+2], 16) / 255.0 for i in (0, 2, 4))
 
-def get_logic_color(tree, layer_name):
-    '''Calculates color group by creation order and brightness by copy count'''
+def get_unique_layers_in_order(tree):
+    '''Returns a list of unique layer names in order of their appearance in the tree'''
     frames = [n for n in tree.nodes if n.type == 'FRAME']
+    unique_layers = []
+    # Sort frames by X position to maintain order from left to right
+    sorted_frames = sorted(frames, key=lambda f: f.location.x)
+    for f in sorted_frames:
+        if f.label not in unique_layers:
+            unique_layers.append(f.label)
+    return unique_layers
+
+def get_logic_style(tree, layer_name):
+    '''Calculates color group and copy count for styling'''
+    unique_layers = get_unique_layers_in_order(tree)
     
-    # Get unique layers already existing in the tree to determine group index
-    unique_existing_layers = []
-    for f in frames:
-        if f.label not in unique_existing_layers:
-            unique_existing_layers.append(f.label)
-    
-    if layer_name in unique_existing_layers:
-        group_idx = unique_existing_layers.index(layer_name)
+    if layer_name in unique_layers:
+        group_idx = unique_layers.index(layer_name)
     else:
-        group_idx = len(unique_existing_layers)
+        group_idx = len(unique_layers)
         
-    # Count how many copies of THIS specific layer already exist
-    copy_idx = len([f for f in frames if f.label == layer_name])
+    copy_idx = len([f for f in tree.nodes if f.type == 'FRAME' and f.label == layer_name])
     
-    # Pick base color from palette
     base_rgb = hex_to_rgb(COLOR_PALETTE[group_idx % len(COLOR_PALETTE)])
     h, s, v = colorsys.rgb_to_hsv(*base_rgb)
     
-    # 10% brightness reduction. Cycles if it gets too dark (< 0.15)
     reduction = (copy_idx * 0.10) % 0.6
     new_v = max(0.15, v - reduction)
     
-    return colorsys.hsv_to_rgb(h, s, new_v)
+    return colorsys.hsv_to_rgb(h, s, new_v), group_idx, copy_idx
 
 def get_compositor_tree(scene):
     if bpy.app.version >= (5, 0, 0):
@@ -110,18 +112,26 @@ def create_exr_multipass(context):
     tree = get_compositor_tree(scene)
     nodes = tree.nodes
     
-    # Calculate tight Y offset (320px gap)
-    min_y = 0
-    if nodes:
-        min_y = min([n.location.y for n in nodes]) - 320
+    # Calculate Styling and Order
+    rgb, group_idx, copy_idx = get_logic_style(tree, view_layer)
+    
+    # Grid Logic: X for columns (Layers), Y for rows (Copies)
+    x_offset = group_idx * 700
+    
+    # Find Y position within the specific column
+    layer_frames = [n for n in nodes if n.type == 'FRAME' and n.label == view_layer]
+    if layer_frames:
+        y_offset = min([f.location.y for f in layer_frames]) - 320
+    else:
+        # If new column, place it at the top level
+        y_offset = 0
 
     # Create Frame
     frame = nodes.new('NodeFrame')
     frame.label = view_layer
     frame.use_custom_color = True
-    rgb = get_logic_color(tree, view_layer)
     frame.color = rgb
-    frame.location = (0, min_y)
+    frame.location = (x_offset, y_offset)
 
     # Nodes Setup
     rl = nodes.new('CompositorNodeRLayers')
