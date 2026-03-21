@@ -1,6 +1,6 @@
 # Changelog
 
-
+All notable changes to **Blender EXR Multipass** are documented in this file.
 
 ## [v1.5.5]
 
