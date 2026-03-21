@@ -1,13 +1,13 @@
 bl_info = {
     'name': 'EXR_multipass',
     'author': 'Rei',
-    'version': (1, 4, 4),
-    'blender': (5, 0, 0),
+    'version': (1, 5, 0),
+    'blender': (4, 0, 0),
     'category': 'Compositing',
     'location': 'Compositing Tab > Sidebar > EXR_multipass',
     'description': (
-        'Auto-create Render Layers + File Output (OpenEXR Multilayer) with named passes, '
-        'duplicate-protection and refresh operator'
+        'Auto-create Render Layers + File Output (OpenEXR Multilayer) with named passes. '
+        'Universal version for Blender 4.x and 5.x'
     ),
 }
 
@@ -54,6 +54,18 @@ PASS_MAP = {
 }
 
 
+def get_compositor_tree(scene):
+    '''Universal node tree getter for all Blender versions'''
+    if bpy.app.version >= (5, 0, 0):
+        if getattr(scene, 'compositing_node_group', None) is None:
+            tree = bpy.data.node_groups.new("Compositor", "CompositorNodeTree")
+            scene.compositing_node_group = tree
+        return scene.compositing_node_group
+    else:
+        scene.use_nodes = True
+        return scene.node_tree
+
+
 def link_render_layers(tree, src, dst):
     '''Link enabled outputs from Render Layers to File Output using PASS_MAP.'''
     for out in src.outputs:
@@ -63,7 +75,7 @@ def link_render_layers(tree, src, dst):
         name = out.name
         key = name if name.startswith('Crypto') else PASS_MAP.get(name, name)
         
-        # Сначала ищем, нет ли уже такого сокета
+        # Check if socket already exists
         target_input = dst.inputs.get(key)
         if not target_input:
             for inp in dst.inputs:
@@ -71,50 +83,52 @@ def link_render_layers(tree, src, dst):
                     target_input = inp
                     break
                 
-        # Если нет — создаем новый и надежно его забираем
+        # Create new slot if missing
         if not target_input:
-            sock_type = out.type
-            
-            if sock_type == 'VALUE':
-                sock_type = 'FLOAT'
-            elif sock_type not in ('FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'RGBA'):
-                sock_type = 'RGBA'
+            if bpy.app.version >= (5, 0, 0):
+                # Logic for Blender 5.0+
+                sock_type = out.type
+                if sock_type == 'VALUE':
+                    sock_type = 'FLOAT'
+                elif sock_type not in ('FLOAT', 'INT', 'BOOLEAN', 'VECTOR', 'RGBA'):
+                    sock_type = 'RGBA'
+                    
+                new_item = dst.file_output_items.new(sock_type, key)
+                target_input = dst.inputs.get(new_item.name)
+                # Fallback to avoid virtual socket in 5.x
+                if not target_input:
+                    target_input = dst.inputs[-2]
+            else:
+                # Logic for Blender 4.x
+                dst.file_slots.new(key)
+                target_input = dst.inputs[-1]
                 
-            # Создаем новый слот
-            new_item = dst.file_output_items.new(sock_type, key)
-            
-            # Получаем свежесозданный сокет строго по его имени
-            target_input = dst.inputs.get(new_item.name)
-            
-            # Резервный вариант: берем предпоследний сокет (т.к. последний всегда виртуальный)
-            if not target_input:
-                target_input = dst.inputs[-2]
-                
-        # Подключаем линию
+        # Establish link
         if target_input:
             tree.links.new(out, target_input)
 
 
 def clear_slots(node_out):
     '''Remove all file slots from the File Output node.'''
-    items = node_out.file_output_items
-    try:
-        items.clear()
-    except AttributeError:
-        for i in range(len(items) - 1, -1, -1):
-            items.remove(items[i])
+    if bpy.app.version >= (5, 0, 0):
+        items = node_out.file_output_items
+        try:
+            items.clear()
+        except AttributeError:
+            for i in range(len(items) - 1, -1, -1):
+                items.remove(items[i])
+    else:
+        try:
+            node_out.file_slots.clear()
+        except AttributeError:
+            for i in range(len(node_out.file_slots) - 1, -1, -1):
+                node_out.file_slots.remove(node_out.file_slots[i])
 
 
 def create_exr_multipass(context):
     '''Create or update Render Layers + File Output nodes.'''  
     scene = context.scene
-    
-    if getattr(scene, 'compositing_node_group', None) is None:
-        tree = bpy.data.node_groups.new("Compositor", "CompositorNodeTree")
-        scene.compositing_node_group = tree
-    else:
-        tree = scene.compositing_node_group
-
+    tree = get_compositor_tree(scene)
     nodes = tree.nodes
 
     rl = nodes.new('CompositorNodeRLayers')
@@ -124,7 +138,8 @@ def create_exr_multipass(context):
     fo.location = (50, 0)
     fo.label = 'EXR_multipass_output'
     
-    if hasattr(fo, 'directory'):
+    # Path attribute naming difference
+    if bpy.app.version >= (5, 0, 0):
         fo.directory = ''
     else:
         fo.base_path = ''
@@ -142,7 +157,7 @@ def create_exr_multipass(context):
 
 def update_exr_multipass(context):
     '''Refresh slots & links for existing EXR multipass node.'''  
-    tree = getattr(context.scene, 'compositing_node_group', None)
+    tree = get_compositor_tree(context.scene)
     if not tree:
         return False
         
@@ -175,7 +190,7 @@ class NODE_OT_exr_multipass(bpy.types.Operator):
         return sd.type == 'NODE_EDITOR' and sd.tree_type == 'CompositorNodeTree'
 
     def execute(self, context):
-        tree = getattr(context.scene, 'compositing_node_group', None)
+        tree = get_compositor_tree(context.scene)
         
         if tree:
             existing = next(
@@ -218,11 +233,11 @@ class NODE_OT_exr_multipass_refresh(bpy.types.Operator):
 
 
 class NODE_PT_exr_multipass_panel(bpy.types.Panel):
-    bl_label = 'EXR_multipass'
+    bl_label = 'EXR Multipass'
     bl_idname = 'NODE_PT_exr_multipass'
     bl_space_type = 'NODE_EDITOR'
     bl_region_type = 'UI'
-    bl_category = 'EXR_multipass'
+    bl_category = 'EXR Multipass'
 
     @classmethod
     def poll(cls, context):
