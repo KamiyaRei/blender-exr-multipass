@@ -1,6 +1,35 @@
 # Changelog
 
-All notable changes to **Blender EXR Multipass** are documented in this file.
+## [1.7.1] - 2026-10-21
+
+Public update from 1.5.5, consolidating the local 1.6.x and 1.7.0 preview builds.
+
+### Added
+- Render Passes panel for the active View Layer, with engine-specific Cycles/Eevee controls and immediate EXR synchronization.
+- Editable output paths and unique filenames for newly created setups.
+- Frame-color status markers, collapsible panels and an explicit Arrange Nodes action.
+- Reproducible ZIP build script, checksum, background tests and test-gated GitHub releases.
+
+### Fixed
+- Blender 4.x errors when removing disabled passes.
+- Custom AOV names colliding with built-in beauty and utility passes.
+- Unrelated frames being mistaken for add-on setups.
+- Refresh losing setups after View Layer renaming or replacing manual processing connections.
+- New setup outputs sharing a filename.
+- Package/file layout changes causing installation errors.
+
+### Changed
+- Custom AOVs use the `aov_` prefix. Built-in Image remains `beauty`.
+- Refresh preserves positions and output paths; arranging is a separate action.
+- Create and Refresh retain double-height buttons.
+- Code is organized as a stable `exrMultipass` package with core, operators and panels modules.
+
+### Upgrade notes
+- Remove a previous single-file installation and restart Blender before installing this ZIP.
+- Setups from 1.5.5 and earlier must be recreated; legacy adoption is not included.
+- Update downstream AOV channel selections if needed. Existing 1.6+ output paths are preserved.
+
+---
 
 ## [v1.5.5]
 

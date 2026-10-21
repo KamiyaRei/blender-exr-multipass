@@ -1,0 +1,81 @@
+name: Test and release
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the current version after tests pass
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        blender: ['4.5.11', '5.2.2']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build installable ZIP
+        run: python tools/build_release.py
+      - name: Download Blender and verify checksum
+        env:
+          VERSION: ${{ matrix.blender }}
+        run: |
+          series=${VERSION%.*}
+          base="https://download.blender.org/release/Blender${series}"
+          file="blender-${VERSION}-linux-x64.tar.xz"
+          curl --fail --location --retry 3 "$base/$file" --output "$RUNNER_TEMP/$file"
+          curl --fail --location --retry 3 "$base/blender-${VERSION}.sha256" --output "$RUNNER_TEMP/blender.sha256"
+          cd "$RUNNER_TEMP"
+          grep " $file$" blender.sha256 | sha256sum --check --strict
+          tar -xf "$file"
+          echo "$RUNNER_TEMP/blender-${VERSION}-linux-x64" >> "$GITHUB_PATH"
+      - name: Install runtime libraries
+        run: sudo apt-get update && sudo apt-get install -y libxrender1 libxi6 libxxf86vm1 libxfixes3 libxkbcommon0 libegl1 libsm6 libgl1
+      - name: Test nodes and render output
+        env:
+          BLENDER_USER_RESOURCES: ${{ runner.temp }}/blender-test-profile
+          EXR_TEST_OUTPUT: ${{ runner.temp }}/exr-test-output
+        run: blender --background --factory-startup --python-exit-code 1 --python tests/regression.py
+      - name: Test Cycles and Eevee pass controls
+        env:
+          BLENDER_USER_RESOURCES: ${{ runner.temp }}/blender-test-profile
+        run: blender --background --factory-startup --python-exit-code 1 --python tests/pass_controls.py
+      - name: Test installation and reinstallation
+        env:
+          BLENDER_USER_RESOURCES: ${{ runner.temp }}/blender-install-profile
+        run: blender --background --factory-startup --python-exit-code 1 --python tests/installation.py
+
+  release:
+    needs: test
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish) ||
+      (github.event_name == 'push' && contains(github.event.head_commit.message, '[release]')))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Build and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(python tools/build_release.py --version)
+          python tools/build_release.py
+          gh release create "v$version" "dist/EXR_Multipass_v$version.zip" "dist/EXR_Multipass_v$version.zip.sha256" --target "$GITHUB_SHA" --title "EXR Multipass $version" --notes-file "docs/releases/v$version.md"
