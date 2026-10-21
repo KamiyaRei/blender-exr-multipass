@@ -1,6 +1,6 @@
 bl_info = {
     'name': 'EXR_multipass',
-    'author': 'Rei',
+    'author': 'KamiyaRei',
     'version': (1, 7, 1),
     'blender': (4, 0, 0),
     'category': 'Compositing',

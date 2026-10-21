@@ -75,7 +75,14 @@ jobs:
       - name: Build and publish
         env:
           GH_TOKEN: ${{ github.token }}
+          REBUILD: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[rebuild]') }}
         run: |
           version=$(python tools/build_release.py --version)
           python tools/build_release.py
-          gh release create "v$version" "dist/EXR_Multipass_v$version.zip" "dist/EXR_Multipass_v$version.zip.sha256" --target "$GITHUB_SHA" --title "EXR Multipass $version" --notes-file "docs/releases/v$version.md"
+          if [ "$REBUILD" = "true" ]; then
+            gh release view "v$version" > /dev/null
+            gh release upload "v$version" "dist/EXR_Multipass_v$version.zip" "dist/EXR_Multipass_v$version.zip.sha256" --clobber
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/v$version" -f sha="$GITHUB_SHA" -F force=true
+          else
+            gh release create "v$version" "dist/EXR_Multipass_v$version.zip" "dist/EXR_Multipass_v$version.zip.sha256" --target "$GITHUB_SHA" --title "EXR Multipass $version" --notes-file "docs/releases/v$version.md"
+          fi

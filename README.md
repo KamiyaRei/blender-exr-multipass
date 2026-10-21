@@ -70,6 +70,8 @@ See [development and release instructions](docs/DEVELOPMENT.md). The `tests/` fo
 
 [Open an issue](https://github.com/KamiyaRei/blender-exr-multipass/issues) with the Blender and add-on versions, render engine, steps to reproduce, and full error text. Include a minimal blend file only if it contains no private assets.
 
+Created by [KamiyaRei](https://github.com/KamiyaRei).
+
 ## License
 
 [GPL-3.0](LICENSE).

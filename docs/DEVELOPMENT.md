@@ -36,5 +36,7 @@ controls and package installation. Visual UI and external compositor checks rema
    `[release]` in the main-branch commit message. Publication only runs after both test jobs pass.
 
 The release job creates the version tag at the tested commit and uploads the ZIP and
-SHA-256 checksum. Existing release tags are not overwritten. Pull requests only run tests.
+SHA-256 checksum. Existing release tags are not overwritten by ordinary publication. An explicitly
+authorized technical rebuild uses `[release] [rebuild]` and replaces the current
+version assets and tag only after tests pass. Pull requests only run tests.
 Bumping a version is intentional; ordinary commits do not publish releases.
